@@ -7,7 +7,7 @@
   --accent: #5e6ad2;
   --accent-glow: rgba(94, 106, 210, 0.4);
   --text: #f0f4f8;
-  --text-muted: #8b9bb4;
+  --text-muted: #c5d2e3; /* Bumped contrast ratio for accessibility */
 }
 
 body {
@@ -50,6 +50,18 @@ h1 {
 .glass-card:hover {
   transform: translateY(-5px);
   box-shadow: 0 12px 40px 0 var(--accent-glow);
+}
+
+.glass-card:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 4px 15px var(--accent-glow);
+}
+
+/* Accessibility: Interactive Clarity Focus Defaults */
+button:focus-visible, input:focus-visible, a:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
 .zones-grid {

@@ -13,6 +13,15 @@ async def lifespan(app: FastAPI):
     print("Initializing SQLite Database...")
     init_db()
     
+    # Google Services: Native Google Cloud Logging Integration
+    try:
+        import google.cloud.logging
+        client = google.cloud.logging.Client()
+        client.setup_logging()
+        print("Google Cloud Logging successfully attached.")
+    except Exception as e:
+        print("Running locally (Google Cloud credentials not found) — skipping Cloud Logging.")
+    
     print("Starting background operations...")
     task = asyncio.create_task(agent_execution_loop())
     
