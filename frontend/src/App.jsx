@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import './index.css';
 
-const API_URL = import.meta.env?.VITE_API_URL || 'http://localhost:8000/api';
+// Dynamically route to current host in production, or localhost during React dev server
+const API_URL = import.meta.env?.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:8000/api');
 const SSE_URL = `${API_URL}/stream`;
 
 const getHeatmapColor = (utilization) => {
