@@ -4,6 +4,8 @@ import uvicorn
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from core.database import init_db
 from agent.loop import agent_execution_loop
 from api.endpoints import router as api_router
@@ -61,6 +63,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Security: Enforce Trusted Hosts and compress data for Efficiency
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 from typing import Optional
 import os

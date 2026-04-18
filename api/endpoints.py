@@ -20,7 +20,8 @@ router = APIRouter()
 
 def _current_state_payload() -> dict:
     """Build the canonical state snapshot broadcast to all SSE clients."""
-    return {"mode": state.mode, "zones": dict(state.zones)}
+    from api.endpoints import get_dashboard_snapshot
+    return get_dashboard_snapshot()
 
 
 async def _broadcast_state() -> None:

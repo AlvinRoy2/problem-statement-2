@@ -257,6 +257,11 @@ function App() {
                   <span style={{ fontSize: '0.9rem', opacity: 0.9, color: '#1a1a2e', fontWeight: 600 }}>
                     {util}% Capacity
                   </span>
+                  {data.queue_wait_min !== undefined && (
+                     <div style={{ marginTop: '0.5rem', background: 'rgba(0,0,0,0.2)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', color: '#fff', fontWeight: 600 }}>
+                       Wait Time: {data.queue_wait_min} mins
+                     </div>
+                  )}
                 </div>
               );
             })
@@ -366,6 +371,12 @@ function App() {
                 >
                   <div style={{ width: `${utilization}%`, height: '100%', background: isAlert ? '#ff5555' : 'var(--accent)', transition: 'width 0.5s ease' }} />
                 </div>
+
+                {data.queue_wait_min !== undefined && (
+                  <div style={{ marginTop: '0.75rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                    <strong style={{ color: data.colour || 'white' }}>Attendee Wait Time:</strong> {data.queue_wait_min} mins
+                  </div>
+                )}
 
                 {/* Inline headcount updater */}
                 <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>

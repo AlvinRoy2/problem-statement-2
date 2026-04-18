@@ -34,7 +34,9 @@ def test_api_register_and_simulate_zone():
     assert res_sim.status_code == 200
     assert res_sim.json()["new_headcount"] == 100
     
-    # 3. Request Dynamic Dashboard Route
+    # 3. Request Dynamic Dashboard Route to verify Wait Time Problem Statement Alignment
     res_dash = client.get("/api/attendee/dashboard")
     assert res_dash.status_code == 200
     assert "Test_Zone_API" in res_dash.json()["zones"]
+    assert "queue_wait_min" in res_dash.json()["zones"]["Test_Zone_API"]
+    assert res_dash.json()["zones"]["Test_Zone_API"]["queue_wait_min"] >= 0
