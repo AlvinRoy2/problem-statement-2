@@ -3,9 +3,11 @@ import time
 import random
 import logging
 
+import os
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-API_URL = "http://localhost:8000/api"
+API_URL = os.getenv("API_URL", "http://localhost:8000/api")
 
 def get_active_zones():
     try:
