@@ -4,7 +4,32 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+    <title>SmartVenue AI</title>
+    
+    <!-- Google Services: Analytics Integration -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-PLACEHOLDER"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-PLACEHOLDER');
+    </script>
+
+    <!-- Google Services: Google Maps API Integration for Topography tracking -->
+    <script defer src="https://maps.googleapis.com/maps/api/js?key=GOOGLE_MAPS_KEY_PLACEHOLDER&libraries=places"></script>
+
+    <!-- Google Services: Firebase SDK Initialization Placeholder -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+      // Firebase configuration
+      const firebaseConfig = {
+        apiKey: "FIREBASE_KEY_PLACEHOLDER",
+        authDomain: "smartvenue-ai.firebaseapp.com",
+        projectId: "smartvenue-ai"
+      };
+      // Initialize Firebase natively
+      const app = initializeApp(firebaseConfig);
+    </script>
   </head>
   <body>
     <div id="root"></div>
