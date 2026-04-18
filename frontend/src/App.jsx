@@ -2,8 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import './index.css';
 
-// Bulletproof dynamic host routing (Ignores potential bad Cloud Run env vars)
-const API_URL = window.location.hostname === 'localhost' ? 'http://localhost:8000/api' : '/api';
+// Universal relative API routing (Inherits host automatically)
+const API_URL = '/api';
 const SSE_URL = `${API_URL}/stream`;
 
 const getHeatmapColor = (utilization) => {
