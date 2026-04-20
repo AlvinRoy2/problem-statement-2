@@ -1,6 +1,6 @@
 # SmartVenue AI — Agent Definition
 > Framework: **RICE** (Role · Intent · Context · Execution)
-> Version: 1.1 | Open Source & Doable Tasks Focus
+> Version: 1.2 | Google AI Services + FOSS Hybrid
 
 ---
 
@@ -63,6 +63,19 @@ DERIVED (computed by Heuristics)
 - **Routing Engine:** Python `networkx` library with static JSON venue map
 - **Ops Alerting:** `Apprise` library routing to Discord / Element / Email
 - **Attendee Notifications:** `ntfy.sh` (free, open-source push topics)
+- **AI Backbone:** Google Gemini API via `google-genai` SDK (GOOGLE_API_KEY from AI Studio only)
+
+### Google AI Services (API-Key Only — No GCP Project Required)
+
+All Google services use `GOOGLE_API_KEY` obtained from [aistudio.google.com](https://aistudio.google.com). No Google Cloud project, no service account, no billing.
+
+| Service | Gemini Feature | SmartVenue Skill |
+|---|---|---|
+| **Text Generation** | `generate_content` with safety filters | AI chat coordinator (illuminate.py) |
+| **Text Embeddings** | `text-embedding-004` (768-dim vectors) | SK-15: Semantic staff note search |
+| **Function Calling** | `generate_content` + `function_declarations` | SK-16: Structured agentic decisions |
+| **Files API** | `files.upload` + multimodal analysis | SK-17: Post-event report AI analysis |
+| **Google Search Grounding** | `google_search` retrieval tool | SK-18: Real-time weather/transport context |
 
 ### Operating Modes
 | Mode | Trigger | Agent Behaviour |
@@ -91,11 +104,13 @@ The agent runs a continuous background async loop (default: 30-second tick) insi
 │                Remove congested edges from graph map    │
 │                                                         │
 │  3. DECIDE     Evaluate alert rule tree (see below)     │
-│                Compose Queue Bounty offers if needed    │
+│                Compose Queue Bounty offers if needed     │
+│                Run Gemini Function Calling (SK-16)       │
 │                                                         │
 │  4. ACT        Dispatch Apprise ops alerts              │
 │                Push POST requests to ntfy.sh topics     │
 │                Write cycle logs to SQLite               │
+│                Upload reports to Gemini Files API       │
 └─────────────────────────────────────────────────────────┘
 ```
 

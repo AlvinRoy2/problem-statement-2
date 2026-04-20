@@ -1,8 +1,8 @@
 # SmartVenue AI — Skills Catalog
 > Framework: **RICE** (Role · Intent · Context · Execution)
-> Version: 1.1 | Open Source & Doable Tasks Focus
+> Version: 1.2 | Google AI Services + FOSS
 
-Each skill is a self-contained, accessible capability module designed to be implemented using free, open-source software (FOSS) and simple heuristics. Heavy machine learning and complex pipelines have been replaced with achievable, high-value systems easily built within a hackathon or by a small team.
+Each skill is a self-contained, accessible capability module. SK-01 through SK-14 use FOSS and simple heuristics. **SK-15 through SK-18 are powered by the Google Gemini API** (API-key only from [aistudio.google.com](https://aistudio.google.com) — no Google Cloud project required).
 
 ---
 
@@ -20,6 +20,14 @@ Each skill is a self-contained, accessible capability module designed to be impl
 | `SK-08` | Accessibility Filter | Routing | Accessibility mode ON |
 | `SK-09` | Event State Machine | Orchestration | Time/manual trigger |
 | `SK-10` | Markdown Post-Event Reporter | Analytics | End of Event |
+| `SK-11` | Per-Zone Density Thresholds | Config | Admin POST |
+| `SK-12` | Automatic Log Cleanup | Maintenance | Every 50 agent cycles |
+| `SK-13` | Live Dashboard Snapshot | API | Frontend poll / SSE |
+| `SK-14` | Staff Incident Notes | Coordination | Staff POST |
+| `SK-15` | **Gemini Semantic Search** *(Google AI)* | Intelligence | Staff search query |
+| `SK-16` | **Gemini Function Calling** *(Google AI)* | Intelligence | Agentic chat request |
+| `SK-17` | **Gemini Files API Analysis** *(Google AI)* | Analytics | Report generated |
+| `SK-18` | **Gemini Grounded Search** *(Google AI)* | Intelligence | Ops context request |
 
 ---
 
@@ -365,4 +373,147 @@ def generate_end_of_day_report():
     
     with open(f"reports/report_{now().date()}.md", "w") as file:
         file.write(report_md)
+```
+
+---
+
+## SK-15 · Gemini Semantic Search (Google AI — API Key Only)
+
+### R — Role
+Provide intelligent semantic search over staff incident notes using Google's
+`text-embedding-004` embedding model, enabling ops staff to find relevant
+incidents by *meaning* rather than keyword matching.
+
+### I — Intent
+When a supervisor asks "any reports of crowd crush near exits?", a keyword
+search would miss notes phrased differently. Gemini embeddings capture
+semantic intent, ranking notes by cosine similarity to the query vector.
+
+### C — Context
+```yaml
+Google Service:  Gemini text-embedding-004 (768-dimensional vectors)
+Auth:            GOOGLE_API_KEY from https://aistudio.google.com (no GCP project)
+Endpoint:        POST /api/staff/notes/search
+Fall-back:       Returns first N notes unranked if API key unavailable
+```
+
+### E — Execution
+```python
+from skills.google_services import semantic_search_notes
+
+# Returns top-5 notes most semantically relevant to the query
+results = semantic_search_notes(
+    query="crowd surge near south exit",
+    notes=get_staff_notes(limit=100),
+    top_k=5
+)
+# Each result includes a '_similarity' float score (0.0–1.0)
+```
+
+---
+
+## SK-16 · Gemini Function Calling (Google AI — API Key Only)
+
+### R — Role
+Upgrade the AI chat assistant from free-text pattern matching to structured
+Gemini function-calling, where Gemini decides which venue action to execute
+and returns typed, validated arguments the backend can act on immediately.
+
+### I — Intent
+Instead of brittle regex parsing of AI output (the old `[ACTION: SET_MODE: X]`
+pattern), Gemini function calling provides a type-safe JSON spec. Gemini
+chooses the right function (`set_venue_mode`, `update_zone_headcount`,
+`dispatch_alert`, `get_zone_status`) and the backend executes it atomically.
+
+### C — Context
+```yaml
+Google Service:  Gemini generate_content with function_declarations tool
+Auth:            GOOGLE_API_KEY from https://aistudio.google.com (no GCP project)
+Endpoint:        POST /api/admin/ai_action
+Functions:       get_zone_status | set_venue_mode | update_zone_headcount | dispatch_alert
+```
+
+### E — Execution
+```python
+from skills.google_services import query_with_function_calling
+
+result = query_with_function_calling(
+    prompt="Main Hall is at 95% capacity, switch to EGRESS mode now",
+    zone_data=state.zones,
+    current_mode=state.mode,
+)
+# result["actions"] = [{"function": "set_venue_mode", "args": {"mode": "EGRESS"}}]
+# result["response"] = "Switching venue to EGRESS mode as Main Hall is critically full."
+```
+
+---
+
+## SK-17 · Gemini Files API Analysis (Google AI — API Key Only)
+
+### R — Role
+After SK-10 generates a Markdown post-event report, upload it to the Gemini
+Files API for multimodal AI analysis and receive an executive summary with
+operational improvement recommendations.
+
+### I — Intent
+A raw Markdown report is data. Gemini Files API turns it into insight: peak
+crowd periods, severity ranking of all incidents, and three actionable
+recommendations for next event — returned as structured prose immediately.
+
+### C — Context
+```yaml
+Google Service:  Gemini Files API (upload) + generate_content (analyze)
+Auth:            GOOGLE_API_KEY from https://aistudio.google.com (no GCP project)
+Free Tier:       20 RPM, files auto-purge after 48h (we delete immediately)
+Endpoint:        POST /api/admin/analyze_report?report_filename=report_XYZ.md
+```
+
+### E — Execution
+```python
+from skills.google_services import analyze_report_with_gemini
+
+# 1. Generate the report first (SK-10)
+report_file = generate_end_of_day_report()   # → "report_2026-04-19_143501.md"
+
+# 2. Upload & analyse via Gemini Files API
+summary = analyze_report_with_gemini(f"reports/{report_file}")
+# summary = "Executive summary: ... | Top incidents: ... | Recommendations: ..."
+```
+
+---
+
+## SK-18 · Gemini Grounding with Google Search (Google AI — API Key Only)
+
+### R — Role
+Enrich venue operations with real-time external intelligence by grounding
+Gemini responses with live Google Search results — providing accurate,
+citation-backed answers about weather, transport, and local events.
+
+### I — Intent
+A venue team managing a 10,000 person outdoor festival needs live weather
+feed. Rather than integrating a separate weather API, Gemini's built-in
+Google Search grounding fetches and synthesises current web information
+in a single API call, using only the existing `GOOGLE_API_KEY`.
+
+### C — Context
+```yaml
+Google Service:  Gemini generate_content with google_search grounding tool
+Auth:            GOOGLE_API_KEY from https://aistudio.google.com (no GCP project)
+Requires:        gemini-2.0-flash or later
+Endpoint:        POST /api/admin/context/realtime
+Use cases:       Weather alerts | Transport disruptions | Nearby events
+```
+
+### E — Execution
+```python
+from skills.google_services import query_with_grounding
+
+answer = query_with_grounding(
+    "Current weather and any severe weather warnings near London O2 Arena today"
+)
+# Returns a factual, Google-Search-grounded response with citations
+print(answer)
+# "Currently 14°C with light rain at the O2. The Met Office has issued a
+#  yellow wind warning valid until 22:00 tonight. Recommend informing attendees
+#  about covered exits. [Source: met.gov.uk, 2026-04-19]"
 ```

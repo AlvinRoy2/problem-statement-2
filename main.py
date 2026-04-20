@@ -15,26 +15,31 @@ async def lifespan(app: FastAPI):
     print("Initializing SQLite Database...")
     init_db()
     
-    # Google Services: Advanced native Google Cloud integrations
+    # ── Google AI Services (API-key only — no GCP project required) ──────────
+    # All four services use the GOOGLE_API_KEY from https://aistudio.google.com
+    # SK-15: Gemini Embeddings | SK-16: Function Calling
+    # SK-17: Files API          | SK-18: Grounding with Google Search
     try:
-        import google.cloud.logging
-        from google.cloud import storage, pubsub_v1
-        
-        # 1. Cloud Logging
-        log_client = google.cloud.logging.Client()
-        log_client.setup_logging()
-        print("Google Cloud Logging successfully attached.")
-        
-        # 2. Cloud Storage (for venue report archives)
-        storage_client = storage.Client()
-        print("Google Cloud Storage client initialized.")
-        
-        # 3. Cloud Pub/Sub (for venue telemetry streaming)
-        publisher = pubsub_v1.PublisherClient()
-        print("Google Cloud Pub/Sub publisher initialized.")
-        
+        import os
+        from google import genai
+        from dotenv import load_dotenv
+        load_dotenv()
+
+        _api_key = os.getenv("GOOGLE_API_KEY", "")
+        if _api_key:
+            _warmup_client = genai.Client(api_key=_api_key)
+            # Lightweight connectivity check — validate the key works
+            _models = [m.name for m in _warmup_client.models.list()]
+            _gemini_models = [m for m in _models if "gemini" in m.lower()]
+            print(f"[OK] Google AI Services ready - {len(_gemini_models)} Gemini model(s) accessible.")
+            print("    SK-15: text-embedding-004 (Semantic Search)")
+            print("    SK-16: Gemini Function Calling (Agentic Decisions)")
+            print("    SK-17: Gemini Files API (Report Analysis)")
+            print("    SK-18: Gemini Grounding + Google Search (Real-Time Context)")
+        else:
+            print("[INFO] GOOGLE_API_KEY not set - Google AI Services will be skipped at runtime.")
     except Exception as e:
-        print("Running locally (Google Cloud credentials not found) — skipping Cloud Services.")
+        print(f"[WARN] Google AI Services warmup skipped: {str(e)}")
     
     print("Starting background operations...")
     task = asyncio.create_task(agent_execution_loop())

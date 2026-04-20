@@ -4,35 +4,35 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SmartVenue AI</title>
-    
-    <!-- Google Services: Analytics Integration -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-PLACEHOLDER"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-PLACEHOLDER');
-    </script>
+    <title>SmartVenue AI — Intelligent Crowd Management</title>
+    <meta name="description" content="SmartVenue AI: Real-time crowd density monitoring, queue prediction, and intelligent staff coordination powered by Google Gemini." />
 
-    <!-- Google Services: Google Maps API Integration for Topography tracking -->
-    <script defer src="https://maps.googleapis.com/maps/api/js?key=GOOGLE_MAPS_KEY_PLACEHOLDER&libraries=places"></script>
+    <!--
+      ╔═══════════════════════════════════════════════════════════════════╗
+      ║  Google Services Integration — all used via API key only         ║
+      ║  (No Google Cloud project or billing account required)           ║
+      ╠═══════════════════════════════════════════════════════════════════╣
+      ║  1. Google Fonts API  — free typography, zero key needed         ║
+      ║  2. Google Maps Embed — free iframe map, zero key needed         ║
+      ║  Backend (Python):                                                ║
+      ║  3. Gemini text-embedding-004 (SK-15) — GOOGLE_API_KEY           ║
+      ║  4. Gemini Function Calling   (SK-16) — GOOGLE_API_KEY           ║
+      ║  5. Gemini Files API          (SK-17) — GOOGLE_API_KEY           ║
+      ║  6. Gemini Grounded Search    (SK-18) — GOOGLE_API_KEY           ║
+      ╚═══════════════════════════════════════════════════════════════════╝
+    -->
 
-    <!-- Google Services: Firebase SDK Initialization Placeholder -->
-    <script type="module">
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-      // Firebase configuration
-      const firebaseConfig = {
-        apiKey: "FIREBASE_KEY_PLACEHOLDER",
-        authDomain: "smartvenue-ai.firebaseapp.com",
-        projectId: "smartvenue-ai"
-      };
-      // Initialize Firebase natively
-      const app = initializeApp(firebaseConfig);
-    </script>
+    <!-- Google Service 1: Google Fonts API (free, no API key required) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
+

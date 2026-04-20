@@ -33,6 +33,14 @@ function App() {
   const [routePath, setRoutePath] = useState(null);
   const [routeError, setRouteError] = useState(null);
 
+  // Google AI Hub State
+  const [semanticResults, setSemanticResults] = useState([]);
+  const [semanticQuery, setSemanticQuery] = useState('');
+  const [groundingTopic, setGroundingTopic] = useState('');
+  const [groundingResponse, setGroundingResponse] = useState('');
+  const [lastAnalysis, setLastAnalysis] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
   const esRef = useRef(null);
   const reconnectTimer = useRef(null);
   const fallbackTimer = useRef(null);
@@ -98,8 +106,24 @@ function App() {
     };
   }, [connectSSE]);
 
-  // ── Chat ────────────────────────────────────────────────────────────────
+  // ── Google AI Handlers ──────────────────────────────────────────────────
 
+  // SK-15: Semantic Note Search
+  const handleSemanticSearch = async (e) => {
+    e.preventDefault();
+    if (!semanticQuery.trim()) return;
+    try {
+      const res = await axios.post(`${API_URL}/staff/notes/search`, { 
+        query: semanticQuery,
+        top_k: 5
+      });
+      setSemanticResults(res.data.results);
+    } catch (e) {
+      setError('Semantic search failed.');
+    }
+  };
+
+  // SK-16: Function-Calling Agentic Chat
   const sendChatMessage = async (e) => {
     e.preventDefault();
     const sanitizedInput = chatInput.trim();
@@ -110,10 +134,44 @@ function App() {
     setChatInput('');
 
     try {
-      const res = await axios.post(`${API_URL}/admin/chat`, { message: userMsg.content });
-      setMessages((prev) => [...prev, { role: 'ai', content: res.data.response || 'Understood.' }]);
+      // Use the new AI action endpoint with function calling
+      const res = await axios.post(`${API_URL}/admin/ai_action`, { message: userMsg.content });
+      setMessages((prev) => [...prev, { 
+        role: 'ai', 
+        content: res.data.response,
+        actions: res.data.actions_executed
+      }]);
     } catch (e) {
-      setMessages((prev) => [...prev, { role: 'ai', content: e.response?.data?.detail || 'Connection Error.' }]);
+      setMessages((prev) => [...prev, { role: 'ai', content: e.response?.data?.detail || 'AI Service Error.' }]);
+    }
+  };
+
+  // SK-17: Gemini Files API Report Analysis
+  const analyzeReport = async (filename) => {
+    setIsAnalyzing(true);
+    setLastAnalysis('');
+    try {
+      const res = await axios.post(`${API_URL}/admin/analyze_report`, null, {
+        params: { report_filename: filename }
+      });
+      setLastAnalysis(res.data.ai_analysis);
+    } catch (e) {
+      setError('AI Report Analysis failed.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // SK-18: Real-time Grounded Search
+  const handleGroundingSearch = async (e) => {
+    e.preventDefault();
+    if (!groundingTopic.trim()) return;
+    setGroundingResponse('Consulting Google Search live results...');
+    try {
+      const res = await axios.post(`${API_URL}/admin/context/realtime`, { topic: groundingTopic });
+      setGroundingResponse(res.data.grounded_response);
+    } catch (e) {
+      setGroundingResponse('Grounded search unavailable.');
     }
   };
 
@@ -122,9 +180,14 @@ function App() {
   const generateReport = async () => {
     try {
       const res = await axios.post(`${API_URL}/admin/generate_report`);
-      setMessages((prev) => [...prev, { role: 'ai', content: `✅ [SYSTEM] Daily Event Report generated! Saved as: ${res.data.file}` }]);
+      const filename = res.data.file;
+      setMessages((prev) => [...prev, { 
+        role: 'ai', 
+        content: `✅ [SYSTEM] Report Generated: ${filename}`,
+        reportFile: filename 
+      }]);
     } catch (e) {
-      setMessages((prev) => [...prev, { role: 'ai', content: `❌ [ERROR] ${e.response?.data?.detail || 'Failed to generate report.'}` }]);
+      setMessages((prev) => [...prev, { role: 'ai', content: `❌ [ERROR] Failed to generate report.` }]);
     }
   };
 
@@ -141,7 +204,6 @@ function App() {
       });
       setNewZoneName('');
       setNewZoneCap('');
-      // No manual fetchState needed — SSE push will arrive instantly
     } catch (e) {
       setError(e.response?.data?.detail || 'Failed to register zone.');
     }
@@ -150,7 +212,6 @@ function App() {
   const handleDeleteZone = async (zone_id) => {
     try {
       await axios.delete(`${API_URL}/admin/zones/${zone_id}`);
-      // SSE push will update the UI instantly
     } catch (e) {
       setError(e.response?.data?.detail || 'Failed to delete zone.');
     }
@@ -164,7 +225,6 @@ function App() {
         params: { zone_id, headcount: count }
       });
       setHeadcountInputs(prev => ({ ...prev, [zone_id]: '' }));
-      // SSE push will update the UI instantly
     } catch (e) {
       setError(e.response?.data?.detail || 'Failed to update headcount.');
     }
@@ -193,7 +253,7 @@ function App() {
         <header className="header-controls">
           <div>
             <h1>SmartVenue AI</h1>
-            <p style={{ color: 'var(--text-muted)', margin: '0.25rem 0 0' }}>Universal Venue Operations Dashboard</p>
+            <p style={{ color: 'var(--text-muted)', margin: '0.25rem 0 0' }}>Universal Venue Operations Dashboard <span className="ai-metric" style={{fontSize: '0.7rem', opacity: 0.6}}>v1.2 Google-AI Mode</span></p>
             {error && (
               <span role="alert" aria-live="assertive" style={{ color: '#ff5555', fontSize: '0.85rem', display: 'block', marginTop: '0.4rem' }}>
                 {error}
@@ -201,15 +261,12 @@ function App() {
             )}
           </div>
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            {/* SSE live status indicator */}
             <div
               title={`Live sync: ${sseStatus}`}
               aria-label={`Live connection status: ${sseStatus}`}
               style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}
             >
-              <span
-                className={`sse-dot sse-dot--${sseStatus}`}
-              />
+              <span className={`sse-dot sse-dot--${sseStatus}`} />
               {sseStatus === 'connected' ? 'Live' : sseStatus === 'connecting' ? 'Connecting…' : 'Reconnecting…'}
             </div>
             <button className="report-btn" onClick={generateReport} aria-label="Generate Markdown report">
@@ -257,16 +314,67 @@ function App() {
                   <span style={{ fontSize: '0.9rem', opacity: 0.9, color: '#1a1a2e', fontWeight: 600 }}>
                     {util}% Capacity
                   </span>
-                  {data.queue_wait_min !== undefined && (
-                     <div style={{ marginTop: '0.5rem', background: 'rgba(0,0,0,0.2)', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', color: '#fff', fontWeight: 600 }}>
-                       Wait Time: {data.queue_wait_min} mins
-                     </div>
-                  )}
                 </div>
               );
             })
           )}
         </div>
+
+        {/* ── Google AI Hub Panel (SK-15, SK-17, SK-18) ── */}
+        <section className="google-ai-panel glass-card">
+          <h3>Google AI Operations Hub</h3>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+            {/* Grounded Search (SK-18) */}
+            <div className="grounding-section">
+              <span className="grounding-badge">Live Context (SK-18)</span>
+              <form onSubmit={handleGroundingSearch} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                <input 
+                  type="text" 
+                  placeholder="Ask about weather, transport..." 
+                  value={groundingTopic}
+                  onChange={e => setGroundingTopic(e.target.value)}
+                  style={{ flex: 1, padding: '0.6rem', borderRadius: '0.4rem', background: 'rgba(0,0,0,0.2)', color: 'white', border: '1px solid var(--glass-border)', fontSize: '0.85rem' }}
+                />
+                <button type="submit" className="report-btn" style={{fontSize: '0.75rem'}}>Check Web</button>
+              </form>
+              {groundingResponse && (
+                <div className="grounding-response">{groundingResponse}</div>
+              )}
+            </div>
+
+            {/* Semantic Note Search (SK-15) */}
+            <div className="semantic-section">
+              <span className="grounding-badge" style={{color: '#a5b4fc'}}>Semantic Note Search (SK-15)</span>
+              <form onSubmit={handleSemanticSearch} style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+                <input 
+                  type="text" 
+                  placeholder="Find incidents by meaning..." 
+                  value={semanticQuery}
+                  onChange={e => setSemanticQuery(e.target.value)}
+                  style={{ flex: 1, padding: '0.6rem', borderRadius: '0.4rem', background: 'rgba(0,0,0,0.2)', color: 'white', border: '1px solid var(--glass-border)', fontSize: '0.85rem' }}
+                />
+                <button type="submit" className="report-btn" style={{fontSize: '0.75rem'}}>Search</button>
+              </form>
+              <div className="search-results" style={{maxHeight: '150px', overflowY: 'auto'}}>
+                {semanticResults.map((r, i) => (
+                  <div key={i} className="search-result-item">
+                    <div className="search-result-text"><strong>{r.author}</strong> ({r.zone_id}): {r.note}</div>
+                    <div className="similarity-score">Score: {r._similarity}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Report Analysis (SK-17) */}
+          {lastAnalysis && (
+            <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--glass-border)', paddingTop: '1rem' }}>
+              <span className="grounding-badge" style={{color: '#fbbc05'}}>Report Intel (SK-17)</span>
+              <div className="grounding-response" style={{whiteSpace: 'pre-line', maxHeight: '200px', overflowY: 'auto'}}>{lastAnalysis}</div>
+            </div>
+          )}
+        </section>
 
         {/* Zone Registration */}
         <div className="glass-card" style={{ marginTop: '1.5rem', border: '1px dashed var(--glass-border)', padding: '1.5rem' }}>
@@ -277,15 +385,15 @@ function App() {
               placeholder="E.g. VIP Lounge"
               value={newZoneName}
               onChange={e => setNewZoneName(e.target.value)}
-              style={{ flex: 1, padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.2)', color: 'white', fontFamily: 'Outfit' }}
+              style={{ flex: 1, padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.2)', color: 'white' }}
               required
             />
             <input
               type="number"
-              placeholder="Max Capacity (e.g. 500)"
+              placeholder="Capacity"
               value={newZoneCap}
               onChange={e => setNewZoneCap(e.target.value)}
-              style={{ width: '200px', padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.2)', color: 'white', fontFamily: 'Outfit' }}
+              style={{ width: '120px', padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.2)', color: 'white' }}
               required
               min="1"
             />
@@ -301,99 +409,58 @@ function App() {
           <form onSubmit={handleGetRoute} style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <input
               type="text"
-              placeholder="Start Zone (e.g. Gate A)"
+              placeholder="Start Zone"
               value={routeStart}
               onChange={e => setRouteStart(e.target.value)}
-              style={{ flex: 1, padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.2)', color: 'white', fontFamily: 'Outfit' }}
+              style={{ flex: 1, padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.2)', color: 'white' }}
               required
             />
             <span style={{color: 'var(--text-muted)'}}>→</span>
             <input
               type="text"
-              placeholder="End Zone (e.g. Concourse)"
+              placeholder="End Zone"
               value={routeEnd}
               onChange={e => setRouteEnd(e.target.value)}
-              style={{ flex: 1, padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.2)', color: 'white', fontFamily: 'Outfit' }}
+              style={{ flex: 1, padding: '0.8rem', borderRadius: '0.5rem', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.2)', color: 'white' }}
               required
             />
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontFamily: 'Outfit', color: 'var(--text)' }}>
-              <input 
-                type="checkbox" 
-                checked={accessibleOnly} 
-                onChange={e => setAccessibleOnly(e.target.checked)} 
-                style={{ width: '1.2rem', height: '1.2rem', accentColor: 'var(--accent)' }}
-              />
-              Avoid Stairs (Accessible)
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'var(--text)' }}>
+              <input type="checkbox" checked={accessibleOnly} onChange={e => setAccessibleOnly(e.target.checked)} style={{ accentColor: 'var(--accent)' }}/>
+              Avoid Stairs
             </label>
             <button type="submit" className="report-btn">Compute Route</button>
           </form>
           {routePath && (
             <div style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(76, 175, 80, 0.1)', border: '1px solid #4CAF50', borderRadius: '0.5rem' }}>
-              <strong style={{color: '#4CAF50'}}>Success! Route taken:</strong> {routePath.join(' ➔ ')}
+              <strong>Route:</strong> {routePath.join(' ➔ ')}
             </div>
-          )}
-          {routeError && (
-             <div style={{ marginTop: '1rem', padding: '1rem', background: 'rgba(244, 67, 54, 0.1)', border: '1px solid #F44336', borderRadius: '0.5rem', color: '#ffaaaa' }}>
-               {routeError}
-             </div>
           )}
         </div>
 
         {/* Zone Cards */}
         <section className="zones-grid" aria-label="Venue Zones" style={{ marginTop: '1rem' }}>
           {Object.entries(state.zones).map(([zoneName, data]) => {
-            const safeCapacity = data.capacity > 0 ? data.capacity : 1;
-            const utilization = Math.round((data.current_headcount / safeCapacity) * 100);
-            const isAlert = utilization > 80;
-
+            const usage = Math.round((data.current_headcount / Math.max(1, data.capacity)) * 100);
             return (
-              <article className="glass-card zone-stat" key={`stat-${zoneName}`} data-testid={`zone-${zoneName}`}>
+              <article className="glass-card zone-stat" key={`stat-${zoneName}`}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                   <h3 style={{ margin: 0 }}>{zoneName.replace(/_/g, ' ')}</h3>
-                  <button
-                    onClick={() => handleDeleteZone(zoneName)}
-                    style={{ background: 'transparent', border: 'none', color: '#ff5555', cursor: 'pointer', fontSize: '1.5rem', lineHeight: '1rem' }}
-                    title="Decommission Node"
-                  >×</button>
+                  <button onClick={() => handleDeleteZone(zoneName)} style={{ background: 'transparent', border: 'none', color: '#ff5555', cursor: 'pointer' }}>×</button>
                 </div>
-
-                <div className="value" aria-label={`${data.current_headcount} out of ${data.capacity} people`}>
-                  {data.current_headcount} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }} aria-hidden="true">/ {data.capacity}</span>
+                <div className="value">{data.current_headcount} <span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>/ {data.capacity}</span></div>
+                <div style={{ marginTop: '1rem', background: 'rgba(0,0,0,0.3)', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
+                  <div style={{ width: `${usage}%`, height: '100%', background: usage > 80 ? '#ff5555' : 'var(--accent)', transition: 'width 0.5s ease' }} />
                 </div>
-
-                <div
-                  role="progressbar"
-                  aria-valuenow={utilization}
-                  aria-valuemin="0"
-                  aria-valuemax="100"
-                  aria-label={`${zoneName} utilization at ${utilization}%`}
-                  style={{ marginTop: '1rem', background: 'rgba(0,0,0,0.3)', height: '6px', borderRadius: '3px', overflow: 'hidden' }}
-                >
-                  <div style={{ width: `${utilization}%`, height: '100%', background: isAlert ? '#ff5555' : 'var(--accent)', transition: 'width 0.5s ease' }} />
-                </div>
-
-                {data.queue_wait_min !== undefined && (
-                  <div style={{ marginTop: '0.75rem', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                    <strong style={{ color: data.colour || 'white' }}>Attendee Wait Time:</strong> {data.queue_wait_min} mins
-                  </div>
-                )}
-
-                {/* Inline headcount updater */}
                 <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
                   <input
                     type="number"
                     min="0"
-                    placeholder="New count"
+                    placeholder="Count"
                     value={headcountInputs[zoneName] ?? ''}
                     onChange={e => setHeadcountInputs(prev => ({ ...prev, [zoneName]: e.target.value }))}
-                    aria-label={`Set headcount for ${zoneName}`}
-                    style={{ flex: 1, padding: '0.4rem 0.6rem', borderRadius: '0.4rem', border: '1px solid var(--glass-border)', background: 'rgba(0,0,0,0.25)', color: 'white', fontFamily: 'Outfit', fontSize: '0.85rem' }}
+                    style={{ flex: 1, padding: '0.4rem', borderRadius: '0.4rem', background: 'rgba(0,0,0,0.2)', color: 'white', border: '1px solid var(--glass-border)', fontSize: '0.85rem' }}
                   />
-                  <button
-                    onClick={() => handleUpdateHeadcount(zoneName)}
-                    style={{ padding: '0.4rem 0.8rem', borderRadius: '0.4rem', border: '1px solid var(--accent)', background: 'transparent', color: 'var(--accent)', cursor: 'pointer', fontFamily: 'Outfit', fontSize: '0.85rem', fontWeight: 600 }}
-                    aria-label={`Update headcount for ${zoneName}`}
-                  >Update</button>
+                  <button onClick={() => handleUpdateHeadcount(zoneName)} className="report-btn" style={{padding: '0.4rem', fontSize: '0.75rem'}}>Update</button>
                 </div>
               </article>
             );
@@ -404,27 +471,35 @@ function App() {
       {/* Chat Panel */}
       <aside className="glass-card chat-box" aria-label="Operations Co-Pilot Chat">
         <h3 style={{ marginTop: 0, paddingBottom: '1rem', borderBottom: '1px solid var(--glass-border)' }}>Ops Co-Pilot</h3>
-        <div className="chat-messages" role="log" aria-live="polite" aria-atomic="false" data-testid="chat-messages">
+        <div className="chat-messages" role="log" style={{flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
           {messages.map((m, i) => (
-            <div key={i} className={`message ${m.role}`} data-testid={`message-${i}`}>
+            <div key={i} className={`message ${m.role}`} style={{padding: '0.75rem', borderRadius: '0.75rem', background: m.role === 'user' ? 'var(--accent)' : 'rgba(255,255,255,0.05)', alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%', fontSize: '0.9rem'}}>
               {m.content}
+              {m.actions && m.actions.map((act, ai) => (
+                <div key={ai} className="function-call-tag" style={{marginTop: '0.5rem'}}>{act}</div>
+              ))}
+              {m.reportFile && (
+                <button 
+                  onClick={() => analyzeReport(m.reportFile)}
+                  className="report-btn" 
+                  disabled={isAnalyzing}
+                  style={{marginTop: '0.5rem', fontSize: '0.75rem', color: '#fbbc05', borderColor: '#fbbc05'}}
+                >
+                  {isAnalyzing ? 'Analyzing…' : 'Analyze Report with Gemini'}
+                </button>
+              )}
             </div>
           ))}
         </div>
-        <form className="chat-input" onSubmit={sendChatMessage} aria-label="Chat input form">
-          <label htmlFor="chat-input" style={{ position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', border: 0 }}>
-            Ask anything about the venue
-          </label>
+        <form className="chat-input" onSubmit={sendChatMessage} style={{display: 'flex', gap: '0.5rem', marginTop: '1rem'}}>
           <input
-            id="chat-input"
             type="text"
             value={chatInput}
             onChange={e => setChatInput(e.target.value)}
-            placeholder="Ask anything about the venue or command me..."
-            aria-required="true"
-            data-testid="chat-input-field"
+            placeholder="Ask or command Gemini AI…"
+            style={{flex: 1, padding: '0.8rem', borderRadius: '0.5rem', background: 'rgba(0,0,0,0.25)', color: 'white', border: '1px solid var(--glass-border)'}}
           />
-          <button type="submit" aria-label="Send message" data-testid="chat-submit-btn">Execute</button>
+          <button type="submit" className="report-btn" style={{borderColor: 'var(--accent)'}}>OK</button>
         </form>
       </aside>
     </div>

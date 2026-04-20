@@ -13,6 +13,12 @@ from skills.sensing import estimate_density
 from skills.logic import predict_queue_wait, check_zone_thresholds
 from skills.illuminate import query_ai_coordinator
 from skills.reporting import generate_end_of_day_report
+from skills.google_services import (
+    semantic_search_notes,
+    query_with_function_calling,
+    analyze_report_with_gemini,
+    query_with_grounding,
+)
 
 router = APIRouter()
 
@@ -50,6 +56,26 @@ class StaffNoteRequest(BaseModel):
     author: str = Field(..., max_length=100)
     note: str = Field(..., max_length=1000)
     zone_id: str = Field(default="general", max_length=100)
+
+
+class SemanticSearchRequest(BaseModel):
+    """SK-15: Semantic staff-note search query."""
+    query: str = Field(..., max_length=300, description="Natural-language search query.")
+    top_k: int = Field(default=5, ge=1, le=20)
+
+
+class AiActionRequest(BaseModel):
+    """SK-16: Structured function-calling chat request."""
+    message: str = Field(..., max_length=500)
+
+
+class GroundingRequest(BaseModel):
+    """SK-18: Real-time grounded search query."""
+    topic: str = Field(
+        ...,
+        max_length=400,
+        description="Topic or question to answer with live Google Search context.",
+    )
 
 
 # ── SSE Stream ─────────────────────────────────────────────────────────────
@@ -299,3 +325,118 @@ def list_staff_notes(limit: int = 20) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="limit must be between 1 and 100.")
     notes = get_staff_notes(limit=limit)
     return {"status": "success", "count": len(notes), "notes": notes}
+
+
+# ─── SK-15: Semantic Staff Note Search (Gemini Embeddings) ─────────────────
+
+@router.post("/staff/notes/search")
+def semantic_note_search(req: SemanticSearchRequest) -> Dict[str, Any]:
+    """
+    SK-15: Semantically search staff incident notes using Gemini text-embedding-004.
+    Returns the most relevant notes ranked by cosine similarity to the query.
+    No GCP project required — uses GOOGLE_API_KEY from AI Studio.
+    """
+    all_notes = get_staff_notes(limit=100)
+    if not all_notes:
+        return {"status": "success", "count": 0, "results": []}
+
+    results = semantic_search_notes(req.query, all_notes, top_k=req.top_k)
+    return {
+        "status": "success",
+        "query": req.query,
+        "count": len(results),
+        "results": results,
+    }
+
+
+# ─── SK-16: AI Function-Calling Chat (Gemini Function Calling) ─────────────
+
+@router.post("/admin/ai_action")
+async def ai_function_action(req: AiActionRequest) -> Dict[str, Any]:
+    """
+    SK-16: Send a staff request to Gemini with structured function-calling tools.
+    Gemini may invoke get_zone_status, set_venue_mode, update_zone_headcount,
+    or dispatch_alert as structured actions that the backend executes immediately.
+    No GCP project required — uses GOOGLE_API_KEY from AI Studio.
+    """
+    result = query_with_function_calling(
+        prompt=req.message,
+        zone_data=state.zones,
+        current_mode=state.mode,
+    )
+
+    # Execute parsed function-call actions against live state
+    executed: list[str] = []
+    for action in result.get("actions", []):
+        fn   = action.get("function", "")
+        args = action.get("args", {})
+        try:
+            if fn == "set_venue_mode" and "mode" in args:
+                state.mode = args["mode"].upper()
+                executed.append(f"Mode → {state.mode}")
+            elif fn == "update_zone_headcount" and "zone_id" in args and "count" in args:
+                state.update_headcount(args["zone_id"], int(args["count"]))
+                executed.append(f"Headcount {args['zone_id']} → {args['count']}")
+            elif fn == "dispatch_alert":
+                executed.append(
+                    f"Alert [{args.get('severity','?')}]: {args.get('message','')[:80]}"
+                )
+            # get_zone_status is read-only — no state mutation needed
+        except (KeyError, ValueError) as e:
+            executed.append(f"Action '{fn}' failed: {e}")
+
+    if executed:
+        await _broadcast_state()
+
+    response_text = result.get("response", "")
+    if executed:
+        response_text += "\n\n⚙️ " + " | ".join(executed)
+
+    return {
+        "status": "success",
+        "response": response_text,
+        "actions_executed": executed,
+        "raw_actions": result.get("actions", []),
+    }
+
+
+# ─── SK-17: Gemini Files API Report Analysis ───────────────────────────────
+
+@router.post("/admin/analyze_report")
+def analyze_last_report(report_filename: str) -> Dict[str, Any]:
+    """
+    SK-17: Upload a previously generated Markdown report to the Gemini Files API
+    and receive an AI-generated executive summary with improvement recommendations.
+    No GCP project required — uses GOOGLE_API_KEY from AI Studio.
+    """
+    import os
+    report_path = os.path.join("reports", report_filename)
+    if not os.path.exists(report_path):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Report '{report_filename}' not found in /reports directory.",
+        )
+
+    analysis = analyze_report_with_gemini(report_path)
+    return {
+        "status": "success",
+        "report": report_filename,
+        "ai_analysis": analysis,
+    }
+
+
+# ─── SK-18: Gemini Grounding with Google Search ────────────────────────────
+
+@router.post("/admin/context/realtime")
+def realtime_web_context(req: GroundingRequest) -> Dict[str, Any]:
+    """
+    SK-18: Use Gemini's built-in Google Search grounding to give the ops team
+    real-time web intelligence — weather, transport, nearby crowd events, etc.
+    No GCP project required — uses GOOGLE_API_KEY from AI Studio.
+    """
+    answer = query_with_grounding(req.topic)
+    return {
+        "status": "success",
+        "topic": req.topic,
+        "grounded_response": answer,
+    }
